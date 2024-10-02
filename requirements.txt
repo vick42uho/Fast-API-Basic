@@ -9,3 +9,5 @@ starlette==0.38.6
 typing_extensions==4.12.2
 psycopg2-binary==2.9.5  # PostgreSQL adapter for Python
 uvicorn==0.15.0  # ASGI server to run your FastAPI application
+sqlalchemy==1.4.41
+
