@@ -1,51 +1,43 @@
-from fastapi import FastAPI, HTTPException
-import asyncpg
-import logging
+from fastapi import FastAPI, Depends
+from sqlalchemy import create_engine, Column, Integer, String
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
+import os
 
-# PostgreSQL connection settings
-DATABASE_URL = 'postgresql://postgres.eyfycqdqpslpnpecmoet:n75tjdrbgajdfgq3ogzdfn@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres'
+# Database setup
+DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://user:password@localhost:5432/dbname')
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+# Department model
+class Department(Base):
+    __tablename__ = "departments"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+
+# Create tables
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-# Logger configuration
-logger = logging.getLogger("uvicorn")
-logger.setLevel(logging.INFO)
-
-# Initialize connection pool for PostgreSQL
-@app.on_event("startup")
-async def startup():
+# Dependency
+def get_db():
+    db = SessionLocal()
     try:
-        app.pool = await asyncpg.create_pool(DATABASE_URL)
-        logger.info("PostgreSQL pool connection established.")
-    except Exception as e:
-        logger.error(f"Error creating PostgreSQL connection pool: {e}")
-        raise HTTPException(status_code=500, detail="Could not connect to the database")
+        yield db
+    finally:
+        db.close()
 
-@app.on_event("shutdown")
-async def shutdown():
-    await app.pool.close()
-    logger.info("PostgreSQL pool connection closed.")
+@app.get("/")
+async def home_root():
+    return {"message": "Success"}
 
-# Endpoint to fetch departments
+@app.get("/deploy")
+async def deploy_info(): 
+    return {"message": "Vercel Deployment"}
+
 @app.get("/departments")
-async def read_departments():
-    query = """
-    SELECT id_department, name_department, code_department 
-    FROM tb_department 
-    WHERE del_flag = 'N' 
-    ORDER BY id_department ASC
-    """
-    try:
-        async with app.pool.acquire() as connection:
-            departments = await connection.fetch(query)
-            return [
-                {
-                    "id_department": department["id_department"],
-                    "name_department": department["name_department"],
-                    "code_department": department["code_department"]
-                }
-                for department in departments
-            ]
-    except Exception as e:
-        logger.error(f"Error fetching departments: {e}")
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+async def get_departments(db: Session = Depends(get_db)):
+    departments = db.query(Department).all()
+    return {"departments": [{"id": dept.id, "name": dept.name} for dept in departments]}
