@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Depends
-from sqlalchemy import create_engine, Column, Integer, String
+from sqlalchemy import create_engine, Column, Integer, String, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 import os
@@ -10,13 +10,15 @@ engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-# Department model
+# Updated Department model to match the query
 class Department(Base):
-    __tablename__ = "departments"
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, index=True)
+    __tablename__ = "tb_department"
+    id_department = Column(Integer, primary_key=True, index=True)
+    name_department = Column(String, index=True)
+    code_department = Column(String, index=True)
+    del_flag = Column(String, index=True)
 
-# Create tables
+# Create tables (in development; for production, manage migrations separately)
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
@@ -39,5 +41,13 @@ async def deploy_info():
 
 @app.get("/departments")
 async def get_departments(db: Session = Depends(get_db)):
-    departments = db.query(Department).all()
-    return {"departments": [{"id": dept.id, "name": dept.name} for dept in departments]}
+    query = text("""
+        SELECT id_department, name_department, code_department 
+        FROM tb_department 
+        WHERE del_flag = 'N' 
+        ORDER BY id_department ASC
+    """)
+    result = db.execute(query)
+    departments = [{"id": row.id_department, "name": row.name_department, "code": row.code_department} 
+                   for row in result]
+    return {"departments": departments}
